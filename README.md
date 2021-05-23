@@ -20,4 +20,4 @@ You will need the following things properly installed on your computer in order 
 
 * `git clone https://github.com/Jxa3128/Tilt-Hydrometer-Website.git` this repository
 * `cd Tilt-Hydrometer-Website`
-* `npm install`
+* `ng serve` Will then open on chrome in localhost:4200
