@@ -1,0 +1,257 @@
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+#include <utility/imumaths.h>
+#include <Arduino_HTS221.h>
+#include <ArduinoBLE.h>
+#include <math.h>
+float theta;
+float SG;
+
+
+#define BNO055_SAMPLERATE_DELAY_MS (100)
+
+
+Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28);
+
+BLEService IMUandTemp("1800");
+
+BLEUnsignedIntCharacteristic IMUandTempdata("2A6E",  // standard 16-bit characteristic UUID
+    BLERead | BLENotify); // remote clients will be able to get notifications if this characteristic changes
+    BLEUnsignedIntCharacteristic xdata("2AF9",  // standard 16-bit characteristic UUID
+    BLERead | BLENotify); // remote clients will be able to get notifications if this characteristic changes
+    BLEUnsignedIntCharacteristic ydata("2AF9",  // standard 16-bit characteristic UUID
+    BLERead | BLENotify); // remote clients will be able to get notifications if this characteristic changes
+    BLEUnsignedIntCharacteristic zdata("2AF9",  // standard 16-bit characteristic UUID
+    BLERead | BLENotify); // remote clients will be able to get notifications if this characteristic changes
+    BLEUnsignedIntCharacteristic thetadata("2A6E",  // standard 16-bit characteristic UUID
+    BLERead | BLENotify); // remote clients will be able to get notifications if this characteristic changes
+    BLEUnsignedIntCharacteristic SGdata("2B0D",  // standard 16-bit characteristic UUID
+    BLERead | BLENotify); // remote clients will be able to get notifications if this characteristic changes
+    int oldxvalue=0;
+    int oldyvalue=0;
+    int oldzvalue=0;
+    int oldIMUandTemp = 0;
+    long previousMillis = 0; 
+    int oldthetavalue=0;
+    int oldSGvalue=0;
+    
+
+/**************************************************************************/
+/*
+    Arduino setup function (automatically called at startup)
+*/
+/**************************************************************************/
+void setup(void)
+{
+  Serial.begin(115200);
+  Serial.println("Orientation Sensor Test"); Serial.println("");
+
+  /* Initialise the sensor */
+  if(!bno.begin())
+  {
+    /* There was a problem detecting the BNO055 ... check your connections */
+    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+    while(1);
+  }
+
+   //while (!Serial);
+
+  if (!HTS.begin()) {
+    Serial.println("Failed to initialize humidity temperature sensor!");
+    while (1);
+  }
+
+  if (!BLE.begin()) {
+    Serial.println("starting BLE failed!");
+
+    while (1);
+  }
+
+  delay(1000);
+
+  /* Display some basic information on this sensor */
+
+  /* Optional: Display current status */
+
+  bno.setExtCrystalUse(true);
+
+  BLE.setLocalName("IMUandTempMonitor");
+  BLE.setAdvertisedService(IMUandTemp); // add the service UUID
+  IMUandTemp.addCharacteristic(IMUandTempdata); // add the battery level characteristic
+  IMUandTemp.addCharacteristic(xdata); // add the battery level characteristic
+  IMUandTemp.addCharacteristic(ydata); // add the battery level characteristic
+  IMUandTemp.addCharacteristic(zdata); // add the battery level characteristic
+  IMUandTemp.addCharacteristic(thetadata);
+  IMUandTemp.addCharacteristic(SGdata);
+  BLE.addService(IMUandTemp); // Add the battery service
+  
+  IMUandTempdata.writeValue(oldIMUandTemp); // set initial value for this characteristic
+  xdata.writeValue(oldxvalue);
+  ydata.writeValue(oldyvalue);
+  zdata.writeValue(oldzvalue);
+  thetadata.writeValue(oldthetavalue);
+  SGdata.writeValue(oldSGvalue);
+  /* Start advertising BLE.  It will start continuously transmitting BLE
+     advertising packets and will be visible to remote BLE central devices
+     until it receives a new connection */
+
+  // start advertising
+  BLE.advertise();
+
+  Serial.println("Bluetooth device active, waiting for connections...");
+}
+
+/**************************************************************************/
+/*
+    Arduino loop function, called once 'setup' is complete (your own code
+    should go here)
+*/
+/**************************************************************************/
+void loop(void)
+{
+  /* Get a new sensor event */
+  sensors_event_t event;
+  bno.getEvent(&event);
+  imu::Vector<3> acc =bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+
+  theta=-atan2(acc.x()/9.8,acc.z()/9.8)/2/3.14592654*360;
+  SG=((theta*theta*.0590237)-(7.32315*theta)+1222.97);
+
+  /* Display the floating point data */
+  Serial.print("X: ");
+  Serial.print(event.orientation.x, 4);
+  Serial.print("\tY: ");
+  Serial.print(event.orientation.y, 4);
+  Serial.print("\tZ: ");
+  Serial.print(event.orientation.z, 4);
+Serial.println();
+  Serial.print("Xacc: ");
+  Serial.print(acc.x()/9.8);
+  Serial.print("\tYacc: ");
+  Serial.print(acc.y()/9.8);
+  Serial.print("\tZacc: ");
+  Serial.print(acc.z()/9.8);
+  Serial.println();
+  Serial.print("\ttheta: ");
+  Serial.print(theta);
+  Serial.println();
+  Serial.print("\tSG: ");
+  Serial.print(SG);
+
+  /* New line for the next sample */
+   // read all the sensor values
+   Serial.println();
+  float temperature = HTS.readTemperature();
+  float farhenheittemp = ((temperature*(1.8)) + 32);
+  float humidity    = HTS.readHumidity();
+
+  // print each of the sensor values
+  Serial.print("Temperature in celsius = ");
+  Serial.print(temperature);
+  Serial.println(" °C");
+
+  Serial.print("Temperature in farhenheit = ");
+  Serial.print(farhenheittemp);
+  Serial.println(" °F");
+
+  Serial.print("Humidity    = ");
+  Serial.print(humidity);
+  Serial.println(" %");
+
+  // print an empty line
+  Serial.println();
+  Serial.println("");
+
+
+
+//new stuff
+
+ // wait for a BLE central
+  BLEDevice central = BLE.central();
+
+  // if a central is connected to the peripheral:
+  if (central) {
+    Serial.print("Connected to central: ");
+    // print the central's BT address:
+    Serial.println(central.address());
+    // turn on the LED to indicate the connection:
+    digitalWrite(LED_BUILTIN, HIGH);
+
+    // check the battery level every 200ms
+    // while the central is connected:
+    while (central.connected()) {
+      long currentMillis = millis();
+      delay(1000);
+       //if 200ms have passed, check the battery level:
+      //if (currentMillis - previousMillis >= 200) {
+        //previousMillis = currentMillis;
+        //updatedata();
+      //}
+      updatedata();
+    }
+    // when the central disconnects, turn off the LED:
+    digitalWrite(LED_BUILTIN, LOW);
+    Serial.print("Disconnected from central: ");
+    Serial.println(central.address());
+    //while (!central.connected()){
+    //bluetooth_reconnect(); //reconnect if disconnected
+    //}
+  }
+  /* Wait the specified delay before requesting nex data */
+  delay(1000);
+}
+
+void updatedata() {
+  //new stuff
+  sensors_event_t event;
+  bno.getEvent(&event);
+  imu::Vector<3> acc =bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+
+  theta=-atan2(acc.x()/9.8,acc.z()/9.8)/2/3.14592654*360;
+  SG=((theta*theta*.0590237)-(7.32315*theta)+1222.97);
+  //end new
+  float temperature = HTS.readTemperature();
+  float farhenheittemp = ((temperature*(1.8)) + 32);
+  int data = farhenheittemp;
+  //new stuff
+  float xvalue=event.orientation.x;
+  float yvalue=event.orientation.y;
+  float zvalue=event.orientation.z;
+  float angletheta= theta;
+  float sgdata=SG;
+  //end new
+  if (data != oldIMUandTemp) {
+    Serial.print("temperature is now: "); // print it
+    Serial.println(data);
+    Serial.print("x is now: "); // print it
+    Serial.println(xvalue);
+    Serial.print("y is now: "); // print it
+    Serial.println(yvalue);
+    Serial.print("z is now: "); // print it
+    Serial.println(zvalue);
+    Serial.print("theta is now: "); // print it
+    Serial.println(angletheta);
+    Serial.print("SG is now: "); // print it
+    Serial.println(sgdata);
+    IMUandTempdata.writeValue(temperature);  // and update the battery level characteristic
+    //new stuff
+    xdata.writeValue(xvalue);
+    ydata.writeValue(yvalue);
+    zdata.writeValue(zvalue);
+    thetadata.writeValue(angletheta);
+    SGdata.writeValue(sgdata);
+    //end new
+    
+    oldIMUandTemp = temperature;           // save the level for next comparison
+  }
+}
+
+void bluetooth_reconnect(){
+    // start advertising
+
+  BLE.advertise();
+
+  Serial.println("Bluetooth device active, waiting for connections...");
+  
+  }
