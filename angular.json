@@ -124,5 +124,8 @@
       }
     }
   },
-  "defaultProject": "sepa"
+  "defaultProject": "sepa",
+  "cli": {
+    "analytics": "84b8a2db-f3d2-4517-b11f-035790dea241"
+  }
 }
