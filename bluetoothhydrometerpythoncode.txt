@@ -1,0 +1,97 @@
+import sys
+import time
+import binascii
+import codecs
+
+from time import sleep,strftime,time
+from argparse import ArgumentParser
+from bluepy import btle  # linux only
+
+
+# Requirements: python3 -m pip install -user -r requirements.txt
+# To Run: python3 ./rasppi_ble_receiver.py d1:aa:89:0c:ee:82 <- MAC address
+
+
+def main():
+    # get args
+    args = get_args()
+
+    print("Connecting...")
+    nanoble33 = btle.Peripheral(args.mac_address)
+
+    print("Discovering Service...")
+    _ = nanoble33.services
+    imuandtempservice = nanoble33.getServiceByUUID("1800")
+
+    print("Discovering Characteristic...")
+    _ = imuandtempservice.getCharacteristics()
+    #with open("/home/pi/PycharmProjects/imuandtempfile.csv", "a") as log:
+    while True:
+            #imutemp=read_temperature(imuandtempservice)
+            #imusg=read_sg(imuandtempservice)
+            #log.write("{0},{1}\n".format(strftime("%Y-%m-%d %H:%M:%S"), str(read_temperature(imuandtempservice))))
+            #log.write("{0},{1}\n".format(strftime("%Y-%m-%d %H:%M:%S"), str(read_sg(imuandtempservice))))
+            #sleep(1)
+        print("\n")
+        read_temperature(imuandtempservice)
+        read_sg(imuandtempservice)
+
+
+def byte_array_to_int(value):
+    # Raw data is hexstring of int values, as a series of bytes, in little endian byte order
+    # values are converted from bytes -> bytearray -> int
+    # e.g., b'\xb8\x08\x00\x00' -> bytearray(b'\xb8\x08\x00\x00') -> 2232
+
+    value = bytearray(value)
+    value = int.from_bytes(value, byteorder="little")
+    return value
+
+
+def byte_array_to_char(value):
+    value = value.decode("utf-8")  # e.g., b'2660,2058,1787,4097\x00' -> 2659,2058,1785,4097
+    return value
+
+
+def decimal_exponent_two(value):
+    return value / 100  # e.g., 2350 -> 23.5
+
+
+def celsius_to_fahrenheit(value):
+    return (value * 100 * 1.8) + 32  # return value*1.0
+
+
+def read_temperature(service):
+    temperature_char = service.getCharacteristics("2A6E")[0]
+    temperature = temperature_char.read()
+    temperature = byte_array_to_int(temperature)
+    temperature = decimal_exponent_two(temperature)
+    temperature = celsius_to_fahrenheit(temperature)
+    print(f"Temperature: {round(temperature, 2)}F")
+    with open("/home/pi/PycharmProjects/imuandtempfile.csv", "a") as log:
+        #while True:
+            #imutemp=read_temperature(imuandtempservice)
+            #imusg=read_sg(imuandtempservice)
+            #log.write("{0},{1}\n".format(strftime("%Y-%m-%d %H:%M:%S"), str(temperature)))
+        log.write("{0},\n".format(str(temperature)))
+
+def read_sg(service):
+    sg_char = service.getCharacteristics("2B0D")[0]
+    sg = sg_char.read()
+    sg = byte_array_to_int(sg)
+    sg = decimal_exponent_two(sg)
+    print(f"SG: {round(sg, 2)}")
+    with open("/home/pi/PycharmProjects/imuandtempfile.csv", "a") as log:
+        #while True:
+            #imutemp=read_temperature(imuandtempservice)
+            #imusg=read_sg(imuandtempservice)
+            #log.write("{0},{1}\n".format(strftime("%Y-%m-%d %H:%M:%S"), str(sg)))
+        log.write("{0},\n".format(str(sg)))
+def get_args():
+    arg_parser = ArgumentParser(description="BLE IoT Sensor Demo")
+    arg_parser.add_argument('mac_address', help="MAC address of device to connect")
+    args = arg_parser.parse_args()
+    return args
+
+
+if __name__ == "__main__":
+    main()
